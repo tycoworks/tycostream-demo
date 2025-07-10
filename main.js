@@ -8,7 +8,7 @@ import { createClient } from 'graphql-ws';
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 const subscription = gql`
-  subscription {
+  subscription LivePnlSubscription {
     live_pnl {
       instrument_id
       symbol
