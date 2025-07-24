@@ -7,26 +7,32 @@ import { createClient } from 'graphql-ws';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
+const fields = [
+  'instrument_id',
+  'symbol',
+  'net_position',
+  'latest_price',
+  'market_value',
+  'avg_cost_basis',
+  'theoretical_pnl'
+];
+
 const subscription = gql`
   subscription LivePnlSubscription {
     live_pnl {
-      instrument_id
-      symbol
-      net_position
-      latest_price
-      market_value
-      avg_cost_basis
-      theoretical_pnl
+      operation
+      data {
+        ${fields.join('\n')}
+      }
     }
   }
 `;
 
-const fields = subscription.loc.source.body.match(/^\s*(\w+)\s*$/gm).map(f => f.trim());
-
 const gridApi = createGrid(document.querySelector('#grid'), {
   theme: 'legacy',
   columnDefs: fields.map(field => ({ field })),
-  rowData: []
+  rowData: [],
+  getRowId: params => String(params.data.instrument_id)
 });
 
 const client = new ApolloClient({
@@ -34,11 +40,16 @@ const client = new ApolloClient({
   cache: new InMemoryCache()
 });
 
-const rows = {};
-
 client.subscribe({ query: subscription }).subscribe(({ data }) => {
   if (data?.live_pnl) {
-    rows[data.live_pnl.instrument_id] = data.live_pnl;
-    gridApi.setGridOption('rowData', Object.values(rows));
+    const { operation, data: rowData } = data.live_pnl;
+    
+    if (operation === 'DELETE' && rowData) {
+      gridApi.applyTransaction({ remove: [rowData] });
+    } else if (operation === 'UPDATE' && rowData) {
+      gridApi.applyTransaction({ update: [rowData] });
+    } else if (operation === 'INSERT' && rowData) {
+      gridApi.applyTransaction({ add: [rowData] });
+    }
   }
 });
